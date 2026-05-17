@@ -223,9 +223,39 @@ def user_public(user: User) -> dict:
 
 
 # ====================== Жизненный цикл ======================
+def ensure_user_columns():
+    """Добавляет недостающие колонки в таблицу users.
+
+    SQLModel.create_all() создаёт только отсутствующие таблицы целиком,
+    но не добавляет новые колонки в уже существующую таблицу. Поэтому,
+    если таблица users была создана до появления полей email_verified
+    и verify_token, их нужно дописать вручную. Существующие данные при
+    этом не теряются. Работает и для PostgreSQL, и для SQLite.
+    """
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return  # таблицы ещё нет — create_all() создаст её сразу правильно
+    existing = {col["name"] for col in inspector.get_columns("users")}
+    missing = {
+        "email_verified": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "verify_token":   "VARCHAR(64) NOT NULL DEFAULT ''",
+    }
+    with engine.begin() as conn:
+        for column, ddl in missing.items():
+            if column not in existing:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column} {ddl}"))
+                print(f"[migrate] добавлена колонка users.{column}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     SQLModel.metadata.create_all(engine)
+    # Лёгкая миграция: дописываем колонки, появившиеся после создания таблицы.
+    try:
+        ensure_user_columns()
+    except Exception as e:
+        print("[migrate] пропущено:", e)
     # Автонаполнение БД при первом запуске — нужно для хостинга (Render и т.п.),
     # где нет доступа к консоли, чтобы запустить seed.py вручную.
     if os.getenv("AUTO_SEED", "1") == "1":
