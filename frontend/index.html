@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a6cff">
+  <title>Европа-Тур — туристическое агентство</title>
+  <meta name="description" content="Подбор и онлайн-бронирование туров по лучшим ценам.">
+
+  <!-- Favicon: самолётик, отдельный SVG-файл -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Применяем сохранённую тему до отрисовки, чтобы не было «мигания» -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a href="#/" class="logo" aria-label="Европа-Тур, на главную">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+          <path d="M2 16.5l20-7-7 13-3.2-5.6L2 16.5z" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="logo-text">Европа<span class="logo-accent">-Тур</span></span>
+    </a>
+
+    <nav class="nav" id="nav">
+      <a href="#/" data-link>Каталог</a>
+      <a href="#/favorites" data-link>Избранное</a>
+      <a href="#/profile" data-link>Личный кабинет</a>
+    </nav>
+
+    <div class="topbar-actions">
+      <button class="theme-toggle" id="theme-toggle" type="button"
+              aria-label="Переключить тему" title="Светлая / тёмная тема">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <div class="auth-area" id="auth-area"></div>
+    </div>
+
+    <button class="burger" id="burger" type="button" aria-label="Меню" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main id="app" class="container"></main>
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="logo-mark logo-mark-sm" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M2 16.5l20-7-7 13-3.2-5.6L2 16.5z"/>
+        </svg>
+      </span>
+      <div>
+        <strong>ООО «Европа-Тур»</strong><br>
+        <span class="footer-muted">
+          190068, г. Санкт-Петербург,<br>
+          наб. Крюкова канала, д. 31, кв. 22
+        </span>
+      </div>
+    </div>
+    <div class="footer-req">
+      <span class="footer-muted">ИНН 7826669006</span>
+      <span class="footer-muted">ОГРН 1027810265922</span>
+      <span class="footer-muted">Генеральный директор: Тимофеева Е. Н.</span>
+    </div>
+    <div class="footer-contacts">
+      <!-- Контактные данные не публикуются в ЕГРЮЛ.
+           Замените на реальные телефон и почту агентства. -->
+      <a href="tel:+78121234567">+7 (812) 123-45-67</a>
+      <a href="mailto:info@europa-tour.ru">info@europa-tour.ru</a>
+    </div>
+    <div class="footer-copy">
+      © 2026 ООО «Европа-Тур».<br>
+      Туристическое агентство с 1995 года.
+    </div>
+  </div>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= Шаблон: каталог ================= -->
+<template id="tpl-catalog">
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Туры мечты по лучшим ценам</h1>
+      <p>Подберите идеальное путешествие за 2 минуты — более 14 направлений по всему миру.</p>
+    </div>
+  </section>
+
+  <section class="filters" aria-label="Фильтры подбора туров">
+    <div class="field field-search">
+      <label for="f-query" class="field-label">Поиск</label>
+      <input type="search" id="f-query" placeholder="Страна, город или отель…" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="f-country" class="field-label">Страна</label>
+      <select id="f-country"><option value="">Все страны</option></select>
+    </div>
+    <div class="field">
+      <label for="f-stars" class="field-label">Категория</label>
+      <select id="f-stars">
+        <option value="">Любая</option>
+        <option value="3">3 ★</option>
+        <option value="4">4 ★</option>
+        <option value="5">5 ★</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-board" class="field-label">Питание</label>
+      <select id="f-board">
+        <option value="">Любое</option>
+        <option value="RO">Без питания</option>
+        <option value="BB">Завтраки</option>
+        <option value="HB">Полупансион</option>
+        <option value="FB">Полный пансион</option>
+        <option value="AI">Всё включено</option>
+        <option value="UAI">Ультра всё вкл.</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-min" class="field-label">Цена от, ₽/ночь</label>
+      <input type="text" inputmode="numeric" id="f-min" placeholder="0">
+    </div>
+    <div class="field">
+      <label for="f-max" class="field-label">Цена до, ₽/ночь</label>
+      <input type="text" inputmode="numeric" id="f-max" placeholder="без лимита">
+    </div>
+    <div class="field field-actions">
+      <button id="f-apply" class="btn btn-primary btn-block">Найти туры</button>
+      <button id="f-reset" class="btn btn-ghost btn-block" type="button">Сбросить</button>
+    </div>
+  </section>
+
+  <div class="catalog-toolbar">
+    <div id="result-count" class="result-count"></div>
+    <div class="field field-sort">
+      <label for="f-sort" class="field-label">Сортировка</label>
+      <select id="f-sort">
+        <option value="">По умолчанию</option>
+        <option value="price_asc">Сначала дешевле</option>
+        <option value="price_desc">Сначала дороже</option>
+        <option value="stars_desc">Сначала 5★</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="tour-grid" class="grid"></div>
+</template>
+
+<!-- ================= Шаблон: карточка тура ================= -->
+<template id="tpl-tour">
+  <a href="#/" class="back-link">← К каталогу</a>
+  <article id="tour-detail" class="tour-detail"></article>
+</template>
+
+<!-- ================= Шаблон: вход ================= -->
+<template id="tpl-login">
+  <section class="auth-form">
+    <h2>Вход в личный кабинет</h2>
+    <form id="login-form" autocomplete="on">
+      <label>Email
+        <input type="email" name="email" required autocomplete="email">
+      </label>
+      <label>Пароль
+        <input type="password" name="password" required minlength="6" autocomplete="current-password">
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Войти</button>
+    </form>
+    <p class="auth-switch">Нет аккаунта? <a href="#/register">Зарегистрироваться</a></p>
+  </section>
+</template>
+
+<!-- ================= Шаблон: регистрация ================= -->
+<template id="tpl-register">
+  <section class="auth-form">
+    <h2>Регистрация</h2>
+    <form id="register-form" autocomplete="on">
+      <div class="form-row">
+        <label>Имя
+          <input type="text" name="first_name" required autocomplete="given-name">
+        </label>
+        <label>Фамилия
+          <input type="text" name="last_name" autocomplete="family-name">
+        </label>
+      </div>
+      <label>Email
+        <input type="email" name="email" required autocomplete="email">
+      </label>
+      <label>Телефон
+        <input type="tel" name="phone" placeholder="+7 (___) ___-__-__" autocomplete="tel">
+      </label>
+      <label>Пароль
+        <input type="password" name="password" required minlength="6" autocomplete="new-password">
+        <span class="field-hint">Минимум 6 символов</span>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Создать аккаунт</button>
+    </form>
+    <p class="auth-switch">Уже есть аккаунт? <a href="#/login">Войти</a></p>
+  </section>
+</template>
+
+<!-- ================= Шаблон: подтверждение email ================= -->
+<template id="tpl-verify">
+  <section class="auth-form verify-box">
+    <div class="verify-icon" aria-hidden="true">✉</div>
+    <h2>Подтвердите email</h2>
+    <div id="verify-body"></div>
+  </section>
+</template>
+
+<!-- ================= Шаблон: личный кабинет ================= -->
+<template id="tpl-profile">
+  <section class="profile">
+    <div class="profile-head">
+      <h2>Личный кабинет</h2>
+    </div>
+
+    <div id="verify-banner"></div>
+
+    <div class="profile-grid">
+      <div class="profile-card" id="profile-info"></div>
+      <div class="profile-card stats-card" id="profile-stats"></div>
+    </div>
+
+    <div class="profile-section">
+      <div class="section-head">
+        <h3>Мои бронирования</h3>
+      </div>
+      <div id="bookings-list" class="bookings-list"></div>
+    </div>
+
+    <div class="profile-section">
+      <h3>Безопасность</h3>
+      <form id="password-form" class="inline-form">
+        <label>Текущий пароль
+          <input type="password" name="old_password" required minlength="6" autocomplete="current-password">
+        </label>
+        <label>Новый пароль
+          <input type="password" name="new_password" required minlength="6" autocomplete="new-password">
+        </label>
+        <button class="btn btn-primary" type="submit">Сменить пароль</button>
+      </form>
+    </div>
+  </section>
+</template>
+
+<!-- ================= Шаблон: редактирование профиля ================= -->
+<template id="tpl-profile-edit">
+  <a href="#/profile" class="back-link">← В личный кабинет</a>
+  <section class="auth-form">
+    <h2>Редактировать данные</h2>
+    <form id="profile-edit-form">
+      <div class="form-row">
+        <label>Имя
+          <input type="text" name="first_name" required>
+        </label>
+        <label>Фамилия
+          <input type="text" name="last_name">
+        </label>
+      </div>
+      <label>Телефон
+        <input type="tel" name="phone" placeholder="+7 (___) ___-__-__">
+      </label>
+      <label class="field-readonly">Email
+        <input type="email" name="email" disabled>
+        <span class="field-hint">Email менять нельзя — он используется для входа</span>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Сохранить изменения</button>
+    </form>
+  </section>
+</template>
+
+<!-- ================= Шаблон: избранное ================= -->
+<template id="tpl-favorites">
+  <section>
+    <div class="section-head">
+      <h2>Избранные туры</h2>
+    </div>
+    <div id="fav-grid" class="grid"></div>
+  </section>
+</template>
+
+<!-- ================= Шаблон: бронирование ================= -->
+<template id="tpl-booking">
+  <a href="#" id="bk-back" class="back-link">← Назад</a>
+  <section class="auth-form booking-form-wrap">
+    <h2>Бронирование тура</h2>
+    <div id="bk-tour-info" class="bk-tour-info"></div>
+    <form id="booking-form">
+      <div class="form-row">
+        <label>Дата заезда
+          <input type="date" name="check_in" required>
+        </label>
+        <label>Количество ночей
+          <input type="number" name="nights" required min="1" max="30" value="7">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>Взрослые
+          <input type="number" name="adults" required min="1" max="6" value="2">
+        </label>
+        <label>Дети
+          <input type="number" name="children" required min="0" max="5" value="0">
+        </label>
+      </div>
+      <div class="total" id="bk-total"></div>
+      <button class="btn btn-primary btn-block" type="submit">Забронировать</button>
+    </form>
+  </section>
+</template>
+
+<!-- ================= Шаблон: оплата ================= -->
+<template id="tpl-payment">
+  <a href="#/profile" class="back-link">← В личный кабинет</a>
+  <section class="auth-form pay-box">
+    <h2>Оплата бронирования</h2>
+    <div id="pay-summary" class="pay-summary"></div>
+
+    <div class="pay-note">
+      Это демонстрационная оплата. Реальные платёжные данные вводить не нужно —
+      нажмите «Оплатить», чтобы сменить статус брони на «Оплачен».
+    </div>
+
+    <div class="pay-methods">
+      <button class="pay-method is-active" data-method="card" type="button">
+        <span class="pay-method-icon">💳</span> Банковская карта
+      </button>
+      <button class="pay-method" data-method="sbp" type="button">
+        <span class="pay-method-icon">⚡</span> СБП
+      </button>
+    </div>
+
+    <button id="pay-confirm" class="btn btn-primary btn-block btn-lg">Оплатить</button>
+  </section>
+</template>
+
+<!--
+  Если backend размещён на ОТДЕЛЬНОМ домене (например api.онридер.com),
+  раскомментируйте строку ниже и укажите адрес. Если сайт и backend
+  на одном домене — оставьте как есть, ничего менять не нужно.
+-->
+<!-- <script>window.API_BASE = "https://api.xn--80aaldqgj.com";</script> -->
+<script src="app.js"></script>
+</body>
+</html>

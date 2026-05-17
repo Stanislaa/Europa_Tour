@@ -1,0 +1,37 @@
+# ============================================================
+#  Render Blueprint для сайта ООО «Европа-Тур»
+#  Разворачивает: 1 веб-сервис (FastAPI + раздача фронтенда)
+#                 1 базу данных PostgreSQL (бесплатный план)
+#  Документация: https://render.com/docs/blueprint-spec
+# ============================================================
+databases:
+  - name: europa-tour-db
+    plan: free
+    databaseName: europa_tour
+    user: europa_tour
+
+services:
+  - type: web
+    name: europa-tour
+    runtime: python
+    plan: free
+    region: frankfurt          # ближайший к РФ регион Render
+    rootDir: backend           # backend лежит в папке code/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api
+    envVars:
+      # Строка подключения к базе подставляется автоматически из europa-tour-db
+      - key: DATABASE_URL
+        fromDatabase:
+          name: europa-tour-db
+          property: connectionString
+      # Секретный ключ для JWT генерируется Render автоматически
+      - key: SECRET_KEY
+        generateValue: true
+      # Версия Python
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      # Автозаполнение базы тестовыми данными при первом старте
+      - key: AUTO_SEED
+        value: "1"
