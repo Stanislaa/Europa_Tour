@@ -332,6 +332,15 @@ async function renderCatalog(app) {
     loadTours();
   };
 
+  // Кнопка из hero — плавный скролл к каталогу.
+  const heroCta = $('#hero-cta');
+  if (heroCta) {
+    heroCta.onclick = () => {
+      const anchor = $('#catalog-anchor');
+      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  }
+
   await loadTours();
 }
 
@@ -555,11 +564,16 @@ function renderRegister(app) {
       });
       setAuth(r.access_token, r.user);
       favIds = null;
-      // сохраняем токен подтверждения, чтобы показать экран верификации
+      // В демо-режиме (без SMTP) сервер отдаёт токен — сохраняем его,
+      // чтобы можно было подтвердить email прямо на сайте.
       if (r.verify_token) {
         try { localStorage.setItem('pending_verify', r.verify_token); } catch (e) {}
       }
-      toast('Аккаунт создан. Подтвердите email.', 'success');
+      // Запоминаем, ушло ли письмо реально — от этого зависит экран verify.
+      try { localStorage.setItem('mail_sent', r.mail_sent ? '1' : '0'); } catch (e) {}
+      toast(r.mail_sent
+        ? 'Аккаунт создан. Письмо отправлено на почту.'
+        : 'Аккаунт создан. Подтвердите email.', 'success');
       navigate('#/verify');
     } catch (e) { toast(e.message, 'error'); }
   };
@@ -587,32 +601,47 @@ async function renderVerify(app) {
   }
 
   let vToken = localStorage.getItem('pending_verify') || '';
+  const mailSent = localStorage.getItem('mail_sent') === '1';
 
-  body.innerHTML = `
-    <p>На адрес <strong>${esc(me.email)}</strong> отправлена ссылка подтверждения.
-    Это демо-стенд без реальной почтовой отправки, поэтому подтвердить email можно прямо здесь.</p>
-    <button class="btn btn-primary btn-block" id="v-confirm">Подтвердить email</button>
-    <button class="btn btn-ghost btn-block" id="v-resend" style="margin-top:10px">
-      Отправить ссылку повторно</button>
-    <p class="field-hint" style="margin-top:14px">
-      В реальной системе пользователь переходит по ссылке из письма.</p>`;
+  if (mailSent) {
+    // Письмо реально отправлено — пользователь переходит по ссылке из письма.
+    body.innerHTML = `
+      <p>На адрес <strong>${esc(me.email)}</strong> отправлено письмо
+      со ссылкой подтверждения. Откройте письмо и нажмите кнопку
+      «Подтвердить e-mail».</p>
+      <p class="field-hint" style="margin:14px 0;">
+        Письмо не пришло? Проверьте папку «Спам» или отправьте повторно.</p>
+      <button class="btn btn-primary btn-block" id="v-resend">
+        Отправить письмо повторно</button>`;
+  } else {
+    // Демо-режим без SMTP — подтверждаем прямо на сайте.
+    body.innerHTML = `
+      <p>На адрес <strong>${esc(me.email)}</strong> отправлена ссылка подтверждения.
+      Почтовая отправка на этом стенде не настроена, поэтому подтвердить email
+      можно прямо здесь.</p>
+      <button class="btn btn-primary btn-block" id="v-confirm">Подтвердить email</button>
+      <button class="btn btn-ghost btn-block" id="v-resend" style="margin-top:10px">
+        Отправить ссылку повторно</button>`;
+  }
 
-  $('#v-confirm').onclick = async () => {
-    if (!vToken) {
-      // получаем токен заново
+  const confirmBtn = $('#v-confirm');
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      if (!vToken) {
+        try {
+          const r = await api('/api/auth/resend', { method: 'POST' });
+          vToken = r.verify_token || '';
+        } catch (e) { toast(e.message, 'error'); return; }
+      }
       try {
-        const r = await api('/api/auth/resend', { method: 'POST' });
-        vToken = r.verify_token || '';
-      } catch (e) { toast(e.message, 'error'); return; }
-    }
-    try {
-      await api('/api/auth/verify?token=' + encodeURIComponent(vToken), { method: 'POST' });
-      localStorage.removeItem('pending_verify');
-      setAuth(token(), { ...userData(), email_verified: true });
-      toast('Email подтверждён', 'success');
-      navigate('#/profile');
-    } catch (e) { toast(e.message, 'error'); }
-  };
+        await api('/api/auth/verify?token=' + encodeURIComponent(vToken), { method: 'POST' });
+        localStorage.removeItem('pending_verify');
+        setAuth(token(), { ...userData(), email_verified: true });
+        toast('Email подтверждён', 'success');
+        navigate('#/profile');
+      } catch (e) { toast(e.message, 'error'); }
+    };
+  }
 
   $('#v-resend').onclick = async () => {
     try {
@@ -621,7 +650,9 @@ async function renderVerify(app) {
         vToken = r.verify_token;
         localStorage.setItem('pending_verify', vToken);
       }
-      toast('Ссылка отправлена повторно', 'success');
+      toast(r.mail_sent
+        ? 'Письмо отправлено повторно'
+        : 'Ссылка обновлена', 'success');
     } catch (e) { toast(e.message, 'error'); }
   };
 }

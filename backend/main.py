@@ -296,14 +296,21 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
         verify_token=secrets.token_urlsafe(24),
     )
     db.add(user); db.commit(); db.refresh(user)
-    # В реальной системе письмо отправляется на почту.
-    # Для демо-стенда токен возвращается прямо в ответе, чтобы можно было подтвердить email.
+    # Отправляем приветственное письмо со ссылкой подтверждения.
+    # Если SMTP не настроен (демо-режим) — письмо не уходит, токен
+    # возвращается в ответе, чтобы регистрацию всё равно можно было завершить.
+    from mailer import send_welcome_email, MAIL_ENABLED
+    send_welcome_email(user.email, user.first_name, user.verify_token)
+
     resp = TokenOut(
         access_token=create_token(user.id),
         user=user_public(user),
     )
     out = resp.model_dump()
-    out["verify_token"] = user.verify_token
+    out["mail_sent"] = MAIL_ENABLED
+    # В демо-режиме (без SMTP) токен отдаётся в ответе для подтверждения вручную.
+    if not MAIL_ENABLED:
+        out["verify_token"] = user.verify_token
     return out
 
 @app.post("/api/auth/login", response_model=TokenOut)
@@ -337,7 +344,12 @@ def resend_verification(user: User = Depends(current_user), db: Session = Depend
     if not user.verify_token:
         user.verify_token = secrets.token_urlsafe(24)
         db.add(user); db.commit(); db.refresh(user)
-    return {"ok": True, "verify_token": user.verify_token}
+    from mailer import send_welcome_email, MAIL_ENABLED
+    send_welcome_email(user.email, user.first_name, user.verify_token)
+    out = {"ok": True, "mail_sent": MAIL_ENABLED}
+    if not MAIL_ENABLED:
+        out["verify_token"] = user.verify_token
+    return out
 
 # ---- Профиль ----
 @app.patch("/api/auth/me")

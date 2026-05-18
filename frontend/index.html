@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0a6cff">
+  <meta name="theme-color" content="#0e8c8c">
   <title>Европа-Тур — туристическое агентство</title>
   <meta name="description" content="Подбор и онлайн-бронирование туров по лучшим ценам.">
 
@@ -108,11 +108,55 @@
 <!-- ================= Шаблон: каталог ================= -->
 <template id="tpl-catalog">
   <section class="hero">
+    <div class="hero-overlay"></div>
     <div class="hero-content">
-      <h1>Туры мечты по лучшим ценам</h1>
-      <p>Подберите идеальное путешествие за 2 минуты — более 14 направлений по всему миру.</p>
+      <span class="hero-eyebrow">Туристическое агентство с 1995 года</span>
+      <h1>Отдых, который запомнится</h1>
+      <p>Подбираем туры по 8 странам и 14 направлениям. Честные цены,
+         проверенные отели, поддержка на каждом этапе путешествия.</p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="hero-stat-num">30</span>
+          <span class="hero-stat-label">лет на рынке</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-num">14</span>
+          <span class="hero-stat-label">направлений</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-num">5★</span>
+          <span class="hero-stat-label">отели-партнёры</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-lg hero-cta" id="hero-cta">Подобрать тур</button>
     </div>
   </section>
+
+  <section class="advantages">
+    <article class="adv-card">
+      <span class="adv-icon">🏖️</span>
+      <h3>Лучшие курорты</h3>
+      <p>Турция, ОАЭ, Таиланд, Греция и другие направления — только
+         проверенные отели на первой береговой линии.</p>
+    </article>
+    <article class="adv-card">
+      <span class="adv-icon">💰</span>
+      <h3>Честная цена</h3>
+      <p>Стоимость за ночь без скрытых доплат. Видно сразу, сколько
+         стоит проживание на человека.</p>
+    </article>
+    <article class="adv-card">
+      <span class="adv-icon">🛟</span>
+      <h3>Поддержка 24/7</h3>
+      <p>Сопровождаем от выбора тура до возвращения домой. Поможем
+         с документами и любыми вопросами в поездке.</p>
+    </article>
+  </section>
+
+  <div class="catalog-head" id="catalog-anchor">
+    <h2 class="section-title">Каталог туров</h2>
+    <p class="section-sub">Выберите направление, отель и даты — забронируйте онлайн</p>
+  </div>
 
   <section class="filters" aria-label="Фильтры подбора туров">
     <div class="field field-search">
@@ -152,15 +196,7 @@
       <label for="f-max" class="field-label">Цена до, ₽/ночь</label>
       <input type="text" inputmode="numeric" id="f-max" placeholder="без лимита">
     </div>
-    <div class="field field-actions">
-      <button id="f-apply" class="btn btn-primary btn-block">Найти туры</button>
-      <button id="f-reset" class="btn btn-ghost btn-block" type="button">Сбросить</button>
-    </div>
-  </section>
-
-  <div class="catalog-toolbar">
-    <div id="result-count" class="result-count"></div>
-    <div class="field field-sort">
+    <div class="field">
       <label for="f-sort" class="field-label">Сортировка</label>
       <select id="f-sort">
         <option value="">По умолчанию</option>
@@ -169,6 +205,14 @@
         <option value="stars_desc">Сначала 5★</option>
       </select>
     </div>
+    <div class="field field-actions">
+      <button id="f-apply" class="btn btn-primary btn-block">Найти туры</button>
+      <button id="f-reset" class="btn btn-ghost btn-block" type="button">Сбросить</button>
+    </div>
+  </section>
+
+  <div class="catalog-toolbar">
+    <div id="result-count" class="result-count"></div>
   </div>
 
   <div id="tour-grid" class="grid"></div>

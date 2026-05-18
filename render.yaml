@@ -35,3 +35,23 @@ services:
       # Автозаполнение базы тестовыми данными при первом старте
       - key: AUTO_SEED
         value: "1"
+      # Адрес сайта — нужен для ссылок подтверждения в письмах.
+      # Замените на реальный адрес вашего сервиса после первого деплоя.
+      - key: SITE_URL
+        value: "https://europa-tour.onrender.com"
+      # ----- Отправка писем (SMTP) -----
+      # Письма уходят на почту, только если заполнены SMTP_HOST,
+      # SMTP_USER и SMTP_PASSWORD. Пока они пустые — работает демо-режим
+      # (подтверждение email прямо на сайте, письмо не отправляется).
+      # Значения задайте в панели Render: Dashboard → сервис → Environment.
+      # НЕ вписывайте пароль в этот файл — он попадёт в репозиторий.
+      - key: SMTP_HOST
+        sync: false          # например smtp.gmail.com или smtp.yandex.ru
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false          # полный адрес почты-отправителя
+      - key: SMTP_PASSWORD
+        sync: false          # пароль приложения (НЕ обычный пароль!)
+      - key: SMTP_FROM_NAME
+        value: "Европа-Тур"
