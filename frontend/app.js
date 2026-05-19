@@ -865,8 +865,8 @@ async function renderProfileEdit(app) {
       const input = btn.parentElement.querySelector('input');
       const show = input.type === 'password';
       input.type = show ? 'text' : 'password';
-      btn.textContent = show ? '🙈' : '👁';
       btn.classList.toggle('is-on', show);
+      btn.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
     };
   });
 
@@ -879,7 +879,9 @@ async function renderProfileEdit(app) {
       e.target.reset();
       $$('[data-eye]').forEach(b => {
         const inp = b.parentElement.querySelector('input');
-        inp.type = 'password'; b.textContent = '👁'; b.classList.remove('is-on');
+        inp.type = 'password';
+        b.classList.remove('is-on');
+        b.setAttribute('aria-label', 'Показать пароль');
       });
       toast('Пароль успешно изменён', 'success');
     } catch (e) { toast(e.message, 'error'); }
