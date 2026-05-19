@@ -3,11 +3,6 @@
 // ============================================================
 
 // ---------------- Конфиг ----------------
-// Адрес backend-API. Приоритет:
-//   1) window.API_BASE — задаётся в index.html, если backend на отдельном домене
-//      (например https://api.онридер.com). Удобно при деплое.
-//   2) localhost — для локальной разработки backend слушает порт 8000.
-//   3) иначе — пустая строка: backend на том же домене, что и сайт (путь /api/...).
 const API = window.API_BASE
   || ((location.origin.includes('localhost') || location.origin.includes('127.0.0.1'))
         ? 'http://localhost:8000' : '');
@@ -27,21 +22,18 @@ const STATUS = {
   confirmed: 'Подтверждён', cancelled: 'Отменён',
 };
 
-// экранирование текста (защита от поломки вёрстки спецсимволами)
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-// рейтинг звёздами — закрашенные + пустые
 function starsHTML(n) {
   n = Math.max(0, Math.min(5, +n || 0));
   return `<span class="stars-on">${'★'.repeat(n)}</span>` +
          `<span class="stars-off">${'★'.repeat(5 - n)}</span>`;
 }
 
-// иконка-сердце для кнопки избранного
 const HEART_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
   <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>`;
 
@@ -51,8 +43,8 @@ function applyTheme(theme) {
   try { localStorage.setItem('theme', theme); } catch (e) {}
 }
 function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme') || 'light';
-  applyTheme(cur === 'light' ? 'dark' : 'light');
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
 }
 
 // ---------------- Авторизация / хранилище ----------------
@@ -173,14 +165,15 @@ const routes = {
   '/profile':     renderProfile,
   '/profile/edit':renderProfileEdit,
   '/favorites':   renderFavorites,
-  '/verify':      renderVerify,
 };
+
+// запоминаем, к какой секции скроллить после рендера главной
+let pendingScroll = null;
 
 async function router() {
   closeMenu();
   const hash = location.hash.slice(1) || '/';
   const [path, ...params] = hash.split('/').filter(Boolean);
-  window.scrollTo(0, 0);
 
   // активная ссылка в навигации
   $$('.nav a').forEach(a => {
@@ -191,20 +184,28 @@ async function router() {
   const app = $('#app');
   app.innerHTML = '';
 
-  if (!path)                          return renderCatalog(app);
+  if (!path) { window.scrollTo(0, 0); return renderCatalog(app); }
+  window.scrollTo(0, 0);
   if (path === 'tour'    && params[0]) return renderTour(app, params[0]);
   if (path === 'book'    && params[0]) return renderBooking(app, params[0]);
   if (path === 'pay'     && params[0]) return renderPayment(app, params[0]);
   if (path === 'profile' && params[0] === 'edit') return renderProfileEdit(app);
   if (routes['/' + path])             return routes['/' + path](app);
 
-  app.innerHTML = `<div class="empty"><span class="empty-icon">🧭</span>
+  app.innerHTML = `<div class="container page-pad"><div class="empty">
+    <span class="empty-icon">🧭</span>
     <strong>Страница не найдена</strong>
-    <a href="#/">Вернуться в каталог</a></div>`;
+    <a href="#/">Вернуться на главную</a></div></div>`;
 }
 
 function navigate(hash) { location.hash = hash; }
 window.addEventListener('hashchange', router);
+
+// плавный скролл к секции на главной
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 // ---------------- Каталог ----------------
 let countriesCache = null;
@@ -213,7 +214,6 @@ async function loadCountries() {
   return countriesCache;
 }
 
-// фабрика карточки тура
 function tourCardHTML(t) {
   const isFav = favIds && favIds.has(t.id);
   return `
@@ -247,7 +247,6 @@ function tourCardHTML(t) {
     </article>`;
 }
 
-// навешиваем обработчики на кнопки избранного внутри грида
 function bindFavButtons(grid) {
   $$('.fav-btn', grid).forEach(btn => {
     btn.onclick = (e) => {
@@ -265,7 +264,7 @@ function renderTourGrid(grid, items) {
     return;
   }
   grid.innerHTML = items.map(tourCardHTML).join('');
-  $$('.card', grid).forEach((c, i) => { c.style.animationDelay = (i * 0.04) + 's'; });
+  $$('.card', grid).forEach((c, i) => { c.style.animationDelay = (i * 0.05) + 's'; });
   bindFavButtons(grid);
 }
 
@@ -277,7 +276,6 @@ async function renderCatalog(app) {
   app.appendChild($('#tpl-catalog').content.cloneNode(true));
   await loadFavIds();
 
-  // заполняем список стран
   const countrySelect = $('#f-country');
   try {
     const countries = await loadCountries();
@@ -288,7 +286,6 @@ async function renderCatalog(app) {
     });
   } catch (e) { /* каталог всё равно загрузится */ }
 
-  // только цифры в полях цены
   ['#f-min', '#f-max'].forEach(sel => {
     $(sel).addEventListener('input', e => {
       e.target.value = e.target.value.replace(/[^\d]/g, '');
@@ -312,9 +309,8 @@ async function renderCatalog(app) {
     try {
       const { items } = await api('/api/tours?' + params);
       renderTourGrid(grid, items);
-      const n = items.length;
-      $('#result-count').textContent = n
-        ? `Найдено туров: ${n}`
+      $('#result-count').textContent = items.length
+        ? `Найдено туров: ${items.length}`
         : 'Ничего не найдено';
     } catch (e) {
       grid.innerHTML = `<div class="empty"><span class="empty-icon">⚠️</span>
@@ -332,16 +328,23 @@ async function renderCatalog(app) {
     loadTours();
   };
 
-  // Кнопка из hero — плавный скролл к каталогу.
-  const heroCta = $('#hero-cta');
-  if (heroCta) {
-    heroCta.onclick = () => {
-      const anchor = $('#catalog-anchor');
-      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
+  $('#hero-cta').onclick = () => scrollToSection('catalog');
+  const ctaReg = $('#cta-register');
+  if (ctaReg && token()) {
+    // если уже вошёл — ведём в каталог вместо регистрации
+    ctaReg.textContent = 'Перейти к турам';
+    ctaReg.setAttribute('href', '#/');
+    ctaReg.onclick = (e) => { e.preventDefault(); scrollToSection('catalog'); };
   }
 
   await loadTours();
+
+  // отложенный скролл к секции (клик по «Туры»/«О нас»/«Контакты»)
+  if (pendingScroll) {
+    const target = pendingScroll;
+    pendingScroll = null;
+    setTimeout(() => scrollToSection(target), 60);
+  }
 }
 
 // ---------------- Карточка тура ----------------
@@ -385,12 +388,12 @@ async function renderTour(app, id) {
 
     $('#t-fav').onclick = async () => {
       const btnEl = $('#t-fav');
-      // имитируем «fav-btn» интерфейс для toggleFavorite
       const fake = { classList: { add(){}, remove(){} } };
       await toggleFavorite(t.id, fake);
       await loadFavIds(true);
       const nowFav = favIds.has(t.id);
       btnEl.textContent = nowFav ? '♥ В избранном' : '♡ В избранное';
+      btnEl.classList.toggle('is-fav', nowFav);
     };
   } catch (e) {
     box.innerHTML = `<div class="empty"><span class="empty-icon">⚠️</span>
@@ -422,12 +425,10 @@ async function renderBooking(app, tourId) {
   const form = $('#booking-form');
   const totalBox = $('#bk-total');
 
-  // ограничиваем ночи диапазоном тура
   form.nights.min = tour.nights_min;
   form.nights.max = tour.nights_max;
   form.nights.value = tour.nights_min;
 
-  // минимум — завтра
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   form.check_in.min = tomorrow.toISOString().split('T')[0];
   form.check_in.value = form.check_in.min;
@@ -461,7 +462,6 @@ async function renderBooking(app, tourId) {
         }),
       });
       toast(`Бронь №${b.id} создана. Перейдите к оплате.`, 'success');
-      // ведём сразу на оплату — закрываем жалобу «непонятно как оплачивать»
       setTimeout(() => navigate('#/pay/' + b.id), 900);
     } catch (e) {
       toast(e.message, 'error');
@@ -481,16 +481,15 @@ async function renderPayment(app, bookingId) {
   } catch (e) { toast(e.message, 'error'); navigate('#/profile'); return; }
 
   if (!booking) {
-    $('#pay-summary').innerHTML = '';
     app.querySelector('.pay-box').innerHTML =
-      `<h2>Бронирование не найдено</h2>
+      `<h2 class="auth-title">Бронирование не найдено</h2>
        <a href="#/profile" class="btn btn-primary btn-block">В личный кабинет</a>`;
     return;
   }
 
   if (booking.status !== 'created') {
     app.querySelector('.pay-box').innerHTML = `
-      <h2>Оплата не требуется</h2>
+      <h2 class="auth-title">Оплата не требуется</h2>
       <p class="field-hint" style="margin:0 0 16px">
         Статус брони №${booking.id}: «${STATUS[booking.status] || booking.status}».</p>
       <a href="#/profile" class="btn btn-primary btn-block">В личный кабинет</a>`;
@@ -507,7 +506,6 @@ async function renderPayment(app, bookingId) {
       <span>${booking.adults} взр.${booking.children ? ' + ' + booking.children + ' дет.' : ''}</span></div>
     <div class="pay-total pay-row"><span>К оплате</span><span>${fmt(booking.total_price)} ₽</span></div>`;
 
-  // выбор способа оплаты
   $$('.pay-method').forEach(m => {
     m.onclick = () => {
       $$('.pay-method').forEach(x => x.classList.remove('is-active'));
@@ -562,97 +560,11 @@ function renderRegister(app) {
         method: 'POST',
         body: JSON.stringify(Object.fromEntries(fd)),
       });
+      // регистрация сразу выполняет вход — без подтверждения почты
       setAuth(r.access_token, r.user);
       favIds = null;
-      // В демо-режиме (без SMTP) сервер отдаёт токен — сохраняем его,
-      // чтобы можно было подтвердить email прямо на сайте.
-      if (r.verify_token) {
-        try { localStorage.setItem('pending_verify', r.verify_token); } catch (e) {}
-      }
-      // Запоминаем, ушло ли письмо реально — от этого зависит экран verify.
-      try { localStorage.setItem('mail_sent', r.mail_sent ? '1' : '0'); } catch (e) {}
-      toast(r.mail_sent
-        ? 'Аккаунт создан. Письмо отправлено на почту.'
-        : 'Аккаунт создан. Подтвердите email.', 'success');
-      navigate('#/verify');
-    } catch (e) { toast(e.message, 'error'); }
-  };
-}
-
-// ---------------- Подтверждение email ----------------
-async function renderVerify(app) {
-  app.appendChild($('#tpl-verify').content.cloneNode(true));
-  const body = $('#verify-body');
-
-  if (!token()) {
-    body.innerHTML = `<p>Войдите в аккаунт, чтобы подтвердить email.</p>
-      <a href="#/login" class="btn btn-primary btn-block">Войти</a>`;
-    return;
-  }
-
-  // проверяем актуальный статус
-  let me;
-  try { me = await api('/api/auth/me'); } catch (e) { return; }
-  if (me.email_verified) {
-    body.innerHTML = `<p>Ваш email <strong>${esc(me.email)}</strong> уже подтверждён.</p>
-      <a href="#/profile" class="btn btn-primary btn-block">В личный кабинет</a>`;
-    setAuth(token(), { ...userData(), email_verified: true });
-    return;
-  }
-
-  let vToken = localStorage.getItem('pending_verify') || '';
-  const mailSent = localStorage.getItem('mail_sent') === '1';
-
-  if (mailSent) {
-    // Письмо реально отправлено — пользователь переходит по ссылке из письма.
-    body.innerHTML = `
-      <p>На адрес <strong>${esc(me.email)}</strong> отправлено письмо
-      со ссылкой подтверждения. Откройте письмо и нажмите кнопку
-      «Подтвердить e-mail».</p>
-      <p class="field-hint" style="margin:14px 0;">
-        Письмо не пришло? Проверьте папку «Спам» или отправьте повторно.</p>
-      <button class="btn btn-primary btn-block" id="v-resend">
-        Отправить письмо повторно</button>`;
-  } else {
-    // Демо-режим без SMTP — подтверждаем прямо на сайте.
-    body.innerHTML = `
-      <p>На адрес <strong>${esc(me.email)}</strong> отправлена ссылка подтверждения.
-      Почтовая отправка на этом стенде не настроена, поэтому подтвердить email
-      можно прямо здесь.</p>
-      <button class="btn btn-primary btn-block" id="v-confirm">Подтвердить email</button>
-      <button class="btn btn-ghost btn-block" id="v-resend" style="margin-top:10px">
-        Отправить ссылку повторно</button>`;
-  }
-
-  const confirmBtn = $('#v-confirm');
-  if (confirmBtn) {
-    confirmBtn.onclick = async () => {
-      if (!vToken) {
-        try {
-          const r = await api('/api/auth/resend', { method: 'POST' });
-          vToken = r.verify_token || '';
-        } catch (e) { toast(e.message, 'error'); return; }
-      }
-      try {
-        await api('/api/auth/verify?token=' + encodeURIComponent(vToken), { method: 'POST' });
-        localStorage.removeItem('pending_verify');
-        setAuth(token(), { ...userData(), email_verified: true });
-        toast('Email подтверждён', 'success');
-        navigate('#/profile');
-      } catch (e) { toast(e.message, 'error'); }
-    };
-  }
-
-  $('#v-resend').onclick = async () => {
-    try {
-      const r = await api('/api/auth/resend', { method: 'POST' });
-      if (r.verify_token) {
-        vToken = r.verify_token;
-        localStorage.setItem('pending_verify', vToken);
-      }
-      toast(r.mail_sent
-        ? 'Письмо отправлено повторно'
-        : 'Ссылка обновлена', 'success');
+      toast('Аккаунт создан. Добро пожаловать!', 'success');
+      navigate('#/');
     } catch (e) { toast(e.message, 'error'); }
   };
 }
@@ -666,7 +578,6 @@ async function renderProfile(app) {
     const u = await api('/api/auth/me');
     setAuth(token(), { ...userData(), ...u });
 
-    // карточка профиля + кнопка редактирования
     $('#profile-info').innerHTML = `
       <div class="profile-id">
         <span class="user-avatar">${esc(initials(u))}</span>
@@ -676,25 +587,15 @@ async function renderProfile(app) {
         </div>
       </div>
       <div class="profile-details">
+        <div class="profile-row"><span class="lbl">Имя</span>
+          <span class="val">${esc((u.first_name || '') + ' ' + (u.last_name || '')).trim() || '—'}</span></div>
+        <div class="profile-row"><span class="lbl">Email</span>
+          <span class="val">${esc(u.email)}</span></div>
         <div class="profile-row"><span class="lbl">Телефон</span>
           <span class="val">${esc(u.phone || 'не указан')}</span></div>
-        <div class="profile-row"><span class="lbl">Email</span>
-          <span class="val">${u.email_verified
-            ? '<span class="verify-pill ok">✓ подтверждён</span>'
-            : '<span class="verify-pill no">не подтверждён</span>'}</span></div>
       </div>
       <a href="#/profile/edit" class="btn btn-outline btn-block">Редактировать данные</a>`;
 
-    // баннер про неподтверждённый email
-    if (!u.email_verified) {
-      $('#verify-banner').innerHTML = `
-        <div class="verify-banner">
-          <span>⚠ Email не подтверждён. Подтвердите его для доступа ко всем функциям.</span>
-          <a href="#/verify" class="btn btn-primary btn-sm">Подтвердить</a>
-        </div>`;
-    }
-
-    // бронирования + статистика
     const bookings = await api('/api/bookings/me');
 
     const total = bookings.length;
@@ -719,7 +620,6 @@ async function renderProfile(app) {
 
     renderBookingsList($('#bookings-list'), bookings);
 
-    // смена пароля
     $('#password-form').onsubmit = async (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
@@ -734,7 +634,6 @@ async function renderProfile(app) {
   }
 }
 
-// список бронирований с кнопками «оплатить» и «отменить»
 function renderBookingsList(list, bookings) {
   if (!bookings.length) {
     list.innerHTML = `<div class="empty"><span class="empty-icon">🧳</span>
@@ -746,7 +645,7 @@ function renderBookingsList(list, bookings) {
     let actions = '';
     if (b.status === 'created') {
       actions = `
-        <a href="#/pay/${b.id}" class="btn btn-primary btn-sm" data-pay="${b.id}">Оплатить</a>
+        <a href="#/pay/${b.id}" class="btn btn-primary btn-sm">Оплатить</a>
         <button class="btn btn-danger btn-sm" data-cancel="${b.id}">Отменить</button>`;
     } else if (b.status === 'paid') {
       actions = `<button class="btn btn-danger btn-sm" data-cancel="${b.id}">Отменить</button>`;
@@ -771,7 +670,6 @@ function renderBookingsList(list, bookings) {
       </div>`;
   }).join('');
 
-  // отмена брони
   $$('[data-cancel]', list).forEach(btn => {
     btn.onclick = async () => {
       if (!confirm('Отменить это бронирование?')) return;
@@ -859,13 +757,33 @@ function toggleMenu() {
 // ---------------- Запуск ----------------
 $('#theme-toggle').onclick = toggleTheme;
 $('#burger').onclick = toggleMenu;
+
 document.addEventListener('click', (e) => {
-  // клик вне меню — закрыть
   if ($('#nav')?.classList.contains('open') &&
       !e.target.closest('#nav') && !e.target.closest('#burger')) {
     closeMenu();
   }
+  // ссылки-якоря на секции главной (data-scroll)
+  const link = e.target.closest('[data-scroll]');
+  if (link) {
+    e.preventDefault();
+    const section = link.dataset.scroll;
+    closeMenu();
+    if ((location.hash.slice(1) || '/') === '/') {
+      scrollToSection(section);
+    } else {
+      pendingScroll = section;
+      navigate('#/');
+    }
+  }
 });
+
+// кнопка «наверх» + тень шапки при прокрутке
+const toTop = $('#to-top');
+toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+window.addEventListener('scroll', () => {
+  toTop.classList.toggle('show', window.scrollY > 480);
+}, { passive: true });
 
 renderAuth();
 router();

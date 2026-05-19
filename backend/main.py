@@ -1,7 +1,6 @@
 """Backend ООО «Европа-Тур»: FastAPI + SQLModel + Redis."""
 import os
 import json
-import secrets
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Optional, List
@@ -80,8 +79,6 @@ class User(SQLModel, table=True):
     last_name: str = ""
     phone: str = ""
     role: str = "client"
-    email_verified: bool = False
-    verify_token: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Country(SQLModel, table=True):
@@ -218,44 +215,14 @@ def user_public(user: User) -> dict:
     return {
         "id": user.id, "email": user.email,
         "first_name": user.first_name, "last_name": user.last_name,
-        "phone": user.phone, "email_verified": user.email_verified,
+        "phone": user.phone,
     }
 
 
 # ====================== Жизненный цикл ======================
-def ensure_user_columns():
-    """Добавляет недостающие колонки в таблицу users.
-
-    SQLModel.create_all() создаёт только отсутствующие таблицы целиком,
-    но не добавляет новые колонки в уже существующую таблицу. Поэтому,
-    если таблица users была создана до появления полей email_verified
-    и verify_token, их нужно дописать вручную. Существующие данные при
-    этом не теряются. Работает и для PostgreSQL, и для SQLite.
-    """
-    from sqlalchemy import inspect, text
-    inspector = inspect(engine)
-    if "users" not in inspector.get_table_names():
-        return  # таблицы ещё нет — create_all() создаст её сразу правильно
-    existing = {col["name"] for col in inspector.get_columns("users")}
-    missing = {
-        "email_verified": "BOOLEAN NOT NULL DEFAULT FALSE",
-        "verify_token":   "VARCHAR(64) NOT NULL DEFAULT ''",
-    }
-    with engine.begin() as conn:
-        for column, ddl in missing.items():
-            if column not in existing:
-                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column} {ddl}"))
-                print(f"[migrate] добавлена колонка users.{column}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     SQLModel.metadata.create_all(engine)
-    # Лёгкая миграция: дописываем колонки, появившиеся после создания таблицы.
-    try:
-        ensure_user_columns()
-    except Exception as e:
-        print("[migrate] пропущено:", e)
     # Автонаполнение БД при первом запуске — нужно для хостинга (Render и т.п.),
     # где нет доступа к консоли, чтобы запустить seed.py вручную.
     if os.getenv("AUTO_SEED", "1") == "1":
@@ -292,26 +259,13 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
         first_name=data.first_name,
         last_name=data.last_name,
         phone=data.phone,
-        email_verified=False,
-        verify_token=secrets.token_urlsafe(24),
     )
     db.add(user); db.commit(); db.refresh(user)
-    # Отправляем приветственное письмо со ссылкой подтверждения.
-    # Если SMTP не настроен (демо-режим) — письмо не уходит, токен
-    # возвращается в ответе, чтобы регистрацию всё равно можно было завершить.
-    from mailer import send_welcome_email, MAIL_ENABLED
-    send_welcome_email(user.email, user.first_name, user.verify_token)
-
-    resp = TokenOut(
+    # Регистрация сразу выполняет вход — без подтверждения email.
+    return TokenOut(
         access_token=create_token(user.id),
         user=user_public(user),
     )
-    out = resp.model_dump()
-    out["mail_sent"] = MAIL_ENABLED
-    # В демо-режиме (без SMTP) токен отдаётся в ответе для подтверждения вручную.
-    if not MAIL_ENABLED:
-        out["verify_token"] = user.verify_token
-    return out
 
 @app.post("/api/auth/login", response_model=TokenOut)
 def login(data: LoginIn, db: Session = Depends(get_db)):
@@ -326,30 +280,6 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 @app.get("/api/auth/me")
 def me(user: User = Depends(current_user)):
     return user_public(user)
-
-@app.post("/api/auth/verify")
-def verify_email(token: str = Query(...), db: Session = Depends(get_db)):
-    user = db.exec(select(User).where(User.verify_token == token)).first()
-    if not user or not token:
-        raise HTTPException(400, "Ссылка подтверждения недействительна или устарела")
-    user.email_verified = True
-    user.verify_token = ""
-    db.add(user); db.commit(); db.refresh(user)
-    return {"ok": True, "message": "Email подтверждён", "user": user_public(user)}
-
-@app.post("/api/auth/resend")
-def resend_verification(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    if user.email_verified:
-        return {"ok": True, "message": "Email уже подтверждён"}
-    if not user.verify_token:
-        user.verify_token = secrets.token_urlsafe(24)
-        db.add(user); db.commit(); db.refresh(user)
-    from mailer import send_welcome_email, MAIL_ENABLED
-    send_welcome_email(user.email, user.first_name, user.verify_token)
-    out = {"ok": True, "mail_sent": MAIL_ENABLED}
-    if not MAIL_ENABLED:
-        out["verify_token"] = user.verify_token
-    return out
 
 # ---- Профиль ----
 @app.patch("/api/auth/me")
