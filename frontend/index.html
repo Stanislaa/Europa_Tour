@@ -175,6 +175,16 @@
     </div>
   </section>
 
+  <section class="section section-destinations">
+    <div class="container">
+      <div class="block-head">
+        <h2 class="block-title">Популярные направления</h2>
+        <p class="block-sub">Куда чаще всего отправляются наши туристы</p>
+      </div>
+      <div class="destinations" id="destinations"></div>
+    </div>
+  </section>
+
   <section class="section section-catalog" id="catalog">
     <div class="container">
       <div class="block-head">
@@ -341,21 +351,19 @@
       </div>
 
       <div class="profile-section">
-        <h3 class="sub-title">Мои бронирования</h3>
+        <div class="section-row">
+          <h3 class="sub-title">Мои бронирования</h3>
+          <a href="#/" class="btn btn-ghost btn-sm">Подобрать тур</a>
+        </div>
         <div id="bookings-list" class="bookings-list"></div>
       </div>
 
       <div class="profile-section">
-        <h3 class="sub-title">Безопасность</h3>
-        <form id="password-form" class="inline-form">
-          <label>Текущий пароль
-            <input type="password" name="old_password" required minlength="6" autocomplete="current-password">
-          </label>
-          <label>Новый пароль
-            <input type="password" name="new_password" required minlength="6" autocomplete="new-password">
-          </label>
-          <button class="btn btn-primary" type="submit">Сменить пароль</button>
-        </form>
+        <div class="section-row">
+          <h3 class="sub-title">Избранные туры</h3>
+          <a href="#/favorites" class="btn btn-ghost btn-sm">Все избранное</a>
+        </div>
+        <div id="profile-favs" class="grid"></div>
       </div>
     </section>
   </div>
@@ -365,7 +373,7 @@
 <template id="tpl-profile-edit">
   <div class="container page-pad">
     <a href="#/profile" class="back-link">← В личный кабинет</a>
-    <section class="auth-form">
+    <section class="auth-form auth-form-wide">
       <h2 class="auth-title">Редактировать данные</h2>
       <form id="profile-edit-form">
         <div class="form-row">
@@ -384,6 +392,25 @@
           <span class="field-hint">Email менять нельзя — он используется для входа</span>
         </label>
         <button class="btn btn-primary btn-block" type="submit">Сохранить изменения</button>
+      </form>
+
+      <div class="form-divider"></div>
+
+      <h3 class="sub-title">Безопасность</h3>
+      <form id="password-form">
+        <label>Текущий пароль
+          <div class="pwd-field">
+            <input type="password" name="old_password" required minlength="6" autocomplete="current-password">
+            <button type="button" class="pwd-eye" aria-label="Показать пароль" data-eye>👁</button>
+          </div>
+        </label>
+        <label>Новый пароль
+          <div class="pwd-field">
+            <input type="password" name="new_password" required minlength="6" autocomplete="new-password">
+            <button type="button" class="pwd-eye" aria-label="Показать пароль" data-eye>👁</button>
+          </div>
+        </label>
+        <button class="btn btn-outline btn-block" type="submit">Сменить пароль</button>
       </form>
     </section>
   </div>

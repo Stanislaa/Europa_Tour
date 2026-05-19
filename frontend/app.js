@@ -337,6 +337,9 @@ async function renderCatalog(app) {
     ctaReg.onclick = (e) => { e.preventDefault(); scrollToSection('catalog'); };
   }
 
+  // популярные направления — карточки стран с фото
+  renderDestinations(loadTours);
+
   await loadTours();
 
   // отложенный скролл к секции (клик по «Туры»/«О нас»/«Контакты»)
@@ -347,7 +350,106 @@ async function renderCatalog(app) {
   }
 }
 
+// фото для популярных направлений (по названию страны)
+const DEST_PHOTOS = {
+  'Турция':   'https://images.unsplash.com/photo-1589561084283-930aa7b1ce50?w=600&q=80',
+  'ОАЭ':      'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80',
+  'Египет':   'https://images.unsplash.com/photo-1539768942893-daf53e448371?w=600&q=80',
+  'Таиланд':  'https://images.unsplash.com/photo-1528181304800-259b08848526?w=600&q=80',
+  'Греция':   'https://images.unsplash.com/photo-1503152394-c571994fd383?w=600&q=80',
+  'Россия':   'https://images.unsplash.com/photo-1547448415-e9f5b28e570d?w=600&q=80',
+  'Грузия':   'https://images.unsplash.com/photo-1565008576549-57569a49371d?w=600&q=80',
+  'Кипр':     'https://images.unsplash.com/photo-1559574569-9f0a4b8c83e9?w=600&q=80',
+};
+const DEST_FALLBACK = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80';
+
+// рисуем блок «Популярные направления»: топ-4 страны по числу туров
+async function renderDestinations(loadTours) {
+  const box = $('#destinations');
+  if (!box) return;
+  try {
+    const { items } = await api('/api/tours?size=50');
+    // считаем количество туров по странам
+    const counts = {};
+    items.forEach(t => { counts[t.country] = (counts[t.country] || 0) + 1; });
+    const countries = await loadCountries();
+    const byName = {};
+    countries.forEach(c => { byName[c.name] = c.id; });
+
+    const top = Object.keys(counts)
+      .sort((a, b) => counts[b] - counts[a])
+      .slice(0, 4);
+
+    if (!top.length) { box.closest('.section').style.display = 'none'; return; }
+
+    const wordTour = (n) => {
+      const d = n % 10, dd = n % 100;
+      if (d === 1 && dd !== 11) return 'тур';
+      if (d >= 2 && d <= 4 && (dd < 10 || dd >= 20)) return 'тура';
+      return 'туров';
+    };
+
+    box.innerHTML = top.map(name => `
+      <div class="dest-card" data-country="${byName[name] || ''}" data-name="${esc(name)}">
+        <img src="${DEST_PHOTOS[name] || DEST_FALLBACK}" alt="${esc(name)}" loading="lazy"
+             onerror="this.onerror=null;this.src='${DEST_FALLBACK}';">
+        <div class="dest-shade"></div>
+        <div class="dest-info">
+          <div class="dest-name">${esc(name)}</div>
+          <div class="dest-count">${counts[name]} ${wordTour(counts[name])}</div>
+        </div>
+      </div>`).join('');
+
+    // клик по направлению — фильтруем каталог по стране
+    $$('.dest-card', box).forEach(card => {
+      card.onclick = () => {
+        const cid = card.dataset.country;
+        if (cid) {
+          $('#f-country').value = cid;
+          loadTours();
+        }
+        scrollToSection('catalog');
+      };
+    });
+  } catch (e) {
+    const sec = box.closest('.section');
+    if (sec) sec.style.display = 'none';
+  }
+}
+
 // ---------------- Карточка тура ----------------
+
+// что входит в стоимость — зависит от типа питания
+function includedItems(t) {
+  const meals = {
+    RO: 'Проживание без питания',
+    BB: 'Завтраки в отеле',
+    HB: 'Завтраки и ужины (полупансион)',
+    FB: 'Трёхразовое питание (полный пансион)',
+    AI: 'Питание «всё включено»',
+    UAI: 'Питание «ультра всё включено»',
+  };
+  return [
+    'Авиаперелёт туда и обратно',
+    `Проживание в отеле «${t.hotel}» ${t.stars}★`,
+    meals[t.board_type] || 'Питание по программе тура',
+    'Трансфер аэропорт — отель — аэропорт',
+    'Медицинская страховка на весь период',
+    'Сопровождение и поддержка 24/7',
+  ];
+}
+
+// особенности тура — короткие пункты
+function tourHighlights(t) {
+  const items = [
+    { ic: '✈', txt: `Направление: ${t.city}, ${t.country}` },
+    { ic: '★', txt: `Категория отеля: ${t.stars} звёзд` },
+    { ic: '☼', txt: BOARD[t.board_type] || 'Питание по программе' },
+    { ic: '◷', txt: `Длительность: от ${t.nights_min} до ${t.nights_max} ночей` },
+  ];
+  return items;
+}
+
 async function renderTour(app, id) {
   app.appendChild($('#tpl-tour').content.cloneNode(true));
   const box = $('#tour-detail');
@@ -357,6 +459,12 @@ async function renderTour(app, id) {
   try {
     const t = await api('/api/tours/' + id);
     const isFav = favIds && favIds.has(t.id);
+
+    const included = includedItems(t).map(x =>
+      `<li><span class="inc-check">✓</span>${esc(x)}</li>`).join('');
+    const highlights = tourHighlights(t).map(h =>
+      `<div class="hl"><span class="hl-ic">${h.ic}</span><span>${esc(h.txt)}</span></div>`).join('');
+
     box.innerHTML = `
       <img class="tour-detail-img" src="${esc(t.image_url || '')}" alt="${esc(t.title)}"
            onerror="this.onerror=null;this.removeAttribute('src');">
@@ -371,7 +479,32 @@ async function renderTour(app, id) {
           <span class="tag tag-board">${esc(BOARD[t.board_type] || t.board_type)}</span>
           <span class="tag">${t.nights_min}–${t.nights_max} ночей</span>
         </div>
-        <p class="description">${esc(t.description || 'Описание тура будет добавлено в ближайшее время.')}</p>
+
+        <div class="tour-section">
+          <h3 class="tour-h3">О туре</h3>
+          <p class="description">${esc(t.description || 'Описание тура будет добавлено в ближайшее время.')}</p>
+        </div>
+
+        <div class="tour-section">
+          <h3 class="tour-h3">Кратко о направлении</h3>
+          <div class="highlights">${highlights}</div>
+        </div>
+
+        <div class="tour-section">
+          <h3 class="tour-h3">Что включено в стоимость</h3>
+          <ul class="included">${included}</ul>
+        </div>
+
+        <div class="tour-section">
+          <h3 class="tour-h3">Важно знать</h3>
+          <ul class="notes-list">
+            <li>Цена указана за одну ночь проживания на одного взрослого.</li>
+            <li>Итоговая стоимость зависит от дат, количества ночей и числа туристов — рассчитывается при бронировании.</li>
+            <li>Для поездки нужен загранпаспорт, действительный не менее 6 месяцев после возвращения.</li>
+            <li>Точный список документов и условия визы менеджер сообщит после бронирования.</li>
+          </ul>
+        </div>
+
         <div class="price-block">
           <div>
             <div class="price-label">Цена</div>
@@ -620,15 +753,22 @@ async function renderProfile(app) {
 
     renderBookingsList($('#bookings-list'), bookings);
 
-    $('#password-form').onsubmit = async (e) => {
-      e.preventDefault();
-      const fd = Object.fromEntries(new FormData(e.target));
-      try {
-        await api('/api/auth/password', { method: 'POST', body: JSON.stringify(fd) });
-        e.target.reset();
-        toast('Пароль успешно изменён', 'success');
-      } catch (e) { toast(e.message, 'error'); }
-    };
+    // блок избранного в кабинете — до 3 туров
+    const favGrid = $('#profile-favs');
+    try {
+      const favs = await api('/api/favorites');
+      await loadFavIds(true);
+      if (!favs.length) {
+        favGrid.innerHTML = `<div class="empty"><span class="empty-icon">♡</span>
+          <strong>В избранном пока пусто</strong>
+          Нажимайте на сердечко в каталоге, чтобы сохранять туры.
+          <div style="margin-top:12px"><a href="#/" class="btn btn-primary btn-sm">Открыть каталог</a></div></div>`;
+      } else {
+        renderTourGrid(favGrid, favs.slice(0, 3));
+      }
+    } catch (e) {
+      favGrid.innerHTML = '';
+    }
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -716,6 +856,32 @@ async function renderProfileEdit(app) {
       setAuth(token(), { ...userData(), ...updated });
       toast('Данные сохранены', 'success');
       navigate('#/profile');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  // переключатели «показать пароль»
+  $$('[data-eye]').forEach(btn => {
+    btn.onclick = () => {
+      const input = btn.parentElement.querySelector('input');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? '🙈' : '👁';
+      btn.classList.toggle('is-on', show);
+    };
+  });
+
+  // смена пароля (форма перенесена сюда из личного кабинета)
+  $('#password-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try {
+      await api('/api/auth/password', { method: 'POST', body: JSON.stringify(fd) });
+      e.target.reset();
+      $$('[data-eye]').forEach(b => {
+        const inp = b.parentElement.querySelector('input');
+        inp.type = 'password'; b.textContent = '👁'; b.classList.remove('is-on');
+      });
+      toast('Пароль успешно изменён', 'success');
     } catch (e) { toast(e.message, 'error'); }
   };
 }
