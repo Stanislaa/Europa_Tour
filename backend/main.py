@@ -1,6 +1,7 @@
 """Backend ООО «Европа-Тур»: FastAPI + SQLModel + Redis."""
 import os
 import json
+import time
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Optional, List
@@ -245,19 +246,26 @@ def user_public(user: User) -> dict:
 # ====================== Жизненный цикл ======================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация БД при старте обёрнута в try/except: если база временно
-    # недоступна (на Render она могла быть пересоздана, «засыпать» или ещё не
-    # подняться), сервис всё равно стартует, а причина видна в логах — без
-    # падения деплоя со статусом 3.
-    try:
-        SQLModel.metadata.create_all(engine)
-        # Автонаполнение БД при первом запуске — нужно для хостинга (Render и т.п.),
-        # где нет доступа к консоли, чтобы запустить seed.py вручную.
-        if os.getenv("AUTO_SEED", "1") == "1":
-            from seed import seed
-            print("[seed]", seed())
-    except Exception as e:
-        print("[startup] БД недоступна при старте, пропускаю инициализацию:", e)
+    # Инициализация БД с несколькими попытками: свежесозданная база на Render
+    # может «подниматься» до минуты, и одной попытки часто мало — тогда таблицы
+    # не создаются и каталог не грузится. Делаем до 10 попыток. Если база так
+    # и не ответила — не падаем: сервис стартует, а статус видно на /api/db-status
+    # и в логах. Таблицы создадутся при следующем рестарте, когда база оживёт.
+    last_err = None
+    for attempt in range(1, 11):
+        try:
+            SQLModel.metadata.create_all(engine)
+            if os.getenv("AUTO_SEED", "1") == "1":
+                from seed import seed
+                print("[seed]", seed())
+            print("[startup] БД готова, инициализация выполнена.")
+            break
+        except Exception as e:
+            last_err = e
+            print(f"[startup] попытка {attempt}/10: база ещё недоступна: {e}")
+            time.sleep(2)
+    else:
+        print("[startup] база так и не ответила, продолжаю без инициализации:", last_err)
     yield
 
 app = FastAPI(title="ООО «Европа-Тур»", lifespan=lifespan)
@@ -278,6 +286,16 @@ app.add_middleware(
 def api_root():
     """Статус API. Корень / отдаёт сам сайт (см. раздачу статики ниже)."""
     return {"app": "Европа-Тур", "status": "ok", "redis": bool(cache)}
+
+@app.get("/api/db-status")
+def db_status(db: Session = Depends(get_db)):
+    """Диагностика базы. Откройте /api/db-status в браузере — увидите либо
+    {"db":"ok","tours":N}, либо реальную причину ошибки подключения/таблиц."""
+    try:
+        n = len(db.exec(select(Tour.id)).all())
+        return {"db": "ok", "tours": n}
+    except Exception as e:
+        return {"db": "error", "detail": str(e)[:400]}
 
 # ---- Аутентификация ----
 @app.post("/api/auth/register")
