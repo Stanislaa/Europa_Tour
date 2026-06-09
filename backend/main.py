@@ -245,15 +245,19 @@ def user_public(user: User) -> dict:
 # ====================== Жизненный цикл ======================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    SQLModel.metadata.create_all(engine)
-    # Автонаполнение БД при первом запуске — нужно для хостинга (Render и т.п.),
-    # где нет доступа к консоли, чтобы запустить seed.py вручную.
-    if os.getenv("AUTO_SEED", "1") == "1":
-        try:
+    # Инициализация БД при старте обёрнута в try/except: если база временно
+    # недоступна (на Render она могла быть пересоздана, «засыпать» или ещё не
+    # подняться), сервис всё равно стартует, а причина видна в логах — без
+    # падения деплоя со статусом 3.
+    try:
+        SQLModel.metadata.create_all(engine)
+        # Автонаполнение БД при первом запуске — нужно для хостинга (Render и т.п.),
+        # где нет доступа к консоли, чтобы запустить seed.py вручную.
+        if os.getenv("AUTO_SEED", "1") == "1":
             from seed import seed
             print("[seed]", seed())
-        except Exception as e:
-            print("[seed] пропущено:", e)
+    except Exception as e:
+        print("[startup] БД недоступна при старте, пропускаю инициализацию:", e)
     yield
 
 app = FastAPI(title="ООО «Европа-Тур»", lifespan=lifespan)
