@@ -552,15 +552,16 @@ async function renderBooking(app, tourId) {
   $('#bk-tour-info').innerHTML = `
     <strong>${esc(tour.title)}</strong><br>
     ${esc(tour.hotel)}, ${esc(tour.city)} · ${esc(BOARD[tour.board_type])}<br>
-    <span class="field-hint">Длительность: ${tour.nights_min}–${tour.nights_max} ночей ·
+    <span class="field-hint">Рекомендуемая длительность: ${tour.nights_min}–${tour.nights_max} ночей ·
     ${fmt(tour.price_per_night)} ₽/ночь за взрослого</span>`;
 
   const form = $('#booking-form');
   const totalBox = $('#bk-total');
 
-  form.nights.min = tour.nights_min;
-  form.nights.max = tour.nights_max;
-  form.nights.value = tour.nights_min;
+  // Длительность выбирает пользователь — без привязки к минимуму тура.
+  form.nights.min = 1;
+  form.nights.max = 30;
+  form.nights.value = 7;
 
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   form.check_in.min = tomorrow.toISOString().split('T')[0];
@@ -579,8 +580,8 @@ async function renderBooking(app, tourId) {
   form.onsubmit = async (e) => {
     e.preventDefault();
     const nights = +form.nights.value;
-    if (nights < tour.nights_min || nights > tour.nights_max) {
-      toast(`Для этого тура: от ${tour.nights_min} до ${tour.nights_max} ночей`, 'error');
+    if (nights < 1 || nights > 30) {
+      toast('Количество ночей: от 1 до 30', 'error');
       return;
     }
     try {

@@ -1042,8 +1042,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 }
 
 @media (max-width: 768px) {
-  .topbar-inner { height: 64px; gap: 10px; }
+  .topbar-inner { height: 64px; gap: 12px; }
   .logo-text { font-size: 16px; }
+  /* Тема + бургер уезжают к правому краю, подальше от названия компании. */
+  .topbar-actions { margin-left: auto; }
   .nav {
     position: fixed; top: 64px; left: 0; right: 0;
     flex-direction: column; align-items: stretch; gap: 4px;
@@ -1078,6 +1080,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   .welcome-feats { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr; gap: 24px; }
   .cta-inner { flex-direction: column; align-items: flex-start; text-align: left; }
+  .cta-inner .btn-lg { width: 100%; }
 
   .booking-card { grid-template-columns: 1fr; }
   .booking-side { text-align: left; align-items: flex-start; }
@@ -1090,7 +1093,12 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 }
 
 @media (max-width: 520px) {
-  .container { padding: 0 16px; }
+  /* Отступы по бокам + учёт «чёлки»/скруглений экрана, чтобы контент
+     не прилипал к рамкам смартфона. */
+  .container {
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+  }
   .filters { grid-template-columns: 1fr; }
   .field-search, .field-actions { grid-column: span 1; }
   .field-actions { flex-direction: column; }
@@ -1102,6 +1110,12 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   .pay-methods { grid-template-columns: 1fr; }
   .auth-form { padding: 26px 20px; }
   .page-pad { padding: 32px 0 56px; }
+  /* Чуть компактнее вертикальные отступы — на телефоне ровнее. */
+  .section, .welcome { padding: 48px 0; }
+  .block-head { margin-bottom: 24px; }
+  /* Плавающие элементы — ближе к краю и над «домашней» полосой телефона. */
+  .to-top { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
+  .toast { bottom: max(20px, env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 380px) {

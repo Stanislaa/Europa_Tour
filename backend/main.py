@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -29,19 +30,41 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-please")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRES = 60 * 24  # минут
 
-engine = create_engine(DATABASE_URL, echo=False)
+# Параметры подключения подбираются под тип БД:
+#  - SQLite: разрешаем работу соединения из разных потоков (uvicorn держит
+#    пул потоков), иначе при нагрузке возможны ошибки.
+#  - PostgreSQL/MySQL: pool_pre_ping проверяет «живость» соединения, а
+#    pool_recycle закрывает простаивающие — так первый запрос после паузы
+#    (частый случай на бесплатном Render) не падает и не тормозит.
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL, echo=False,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL, echo=False,
+        pool_pre_ping=True, pool_recycle=300,
+    )
 
-# Встроенная функция SQLite lower() не понимает кириллицу и переводит
-# в нижний регистр только латиницу. Регистрируем свою юникод-версию,
-# чтобы поиск по названию отеля/города/страны работал без учёта регистра.
+# Настройка SQLite-соединения при подключении.
 if DATABASE_URL.startswith("sqlite"):
     from sqlalchemy import event
 
     @event.listens_for(engine, "connect")
-    def _register_unicode_lower(dbapi_conn, _):
+    def _sqlite_on_connect(dbapi_conn, _):
+        # Встроенный lower() не понимает кириллицу — регистрируем юникод-версию,
+        # чтобы поиск по названию отеля/города/страны был без учёта регистра.
         dbapi_conn.create_function(
             "lower", 1, lambda s: s.lower() if isinstance(s, str) else s
         )
+        # Режим WAL и мягкая синхронизация ускоряют чтение/запись и позволяют
+        # читать во время записи; busy_timeout убирает ошибки «database is locked».
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.execute("PRAGMA busy_timeout=5000")
+        cur.close()
 
 oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -91,24 +114,24 @@ class Country(SQLModel, table=True):
 class Hotel(SQLModel, table=True):
     __tablename__ = "hotels"
     id: Optional[int] = Field(default=None, primary_key=True)
-    country_id: int = Field(foreign_key="countries.id")
+    country_id: int = Field(foreign_key="countries.id", index=True)
     name: str
     city: str
-    star_rating: int = 4
+    star_rating: int = Field(default=4, index=True)
 
 class Tour(SQLModel, table=True):
     __tablename__ = "tours"
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str
-    country_id: int = Field(foreign_key="countries.id")
-    hotel_id: int = Field(foreign_key="hotels.id")
+    country_id: int = Field(foreign_key="countries.id", index=True)
+    hotel_id: int = Field(foreign_key="hotels.id", index=True)
     nights_min: int = 7
     nights_max: int = 14
-    board_type: str = "AI"  # RO/BB/HB/FB/AI
-    price_per_night: Decimal = Field(max_digits=10, decimal_places=2)
+    board_type: str = Field(default="AI", index=True)  # RO/BB/HB/FB/AI
+    price_per_night: Decimal = Field(max_digits=10, decimal_places=2, index=True)
     description: str = ""
     image_url: str = ""
-    is_active: bool = True
+    is_active: bool = Field(default=True, index=True)
 
 class Booking(SQLModel, table=True):
     __tablename__ = "bookings"
@@ -234,6 +257,10 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="ООО «Европа-Тур»", lifespan=lifespan)
+
+# Сжатие ответов (HTML/CSS/JS/JSON) — заметно ускоряет загрузку по сети,
+# особенно крупных файлов фронтенда.
+app.add_middleware(GZipMiddleware, minimum_size=512)
 
 app.add_middleware(
     CORSMiddleware,
@@ -399,8 +426,12 @@ def create_booking(data: BookingCreate, user: User = Depends(current_user), db: 
     tour = db.get(Tour, data.tour_id)
     if not tour:
         raise HTTPException(404, "Тур не найден")
-    if data.nights < tour.nights_min or data.nights > tour.nights_max:
-        raise HTTPException(400, f"Количество ночей для этого тура: от {tour.nights_min} до {tour.nights_max}")
+    # Длительность выбирает пользователь — жёсткой привязки к туру нет.
+    # Остаются только разумные общие рамки.
+    if data.nights < 1 or data.nights > 30:
+        raise HTTPException(400, "Количество ночей: от 1 до 30")
+    if data.adults < 1:
+        raise HTTPException(400, "Нужен хотя бы один взрослый в брони")
     base = tour.price_per_night * data.nights
     total = base * (Decimal(data.adults) + Decimal("0.5") * data.children)
     total = total.quantize(Decimal("0.01"))
@@ -508,12 +539,27 @@ def favorite_ids(user: User = Depends(current_user), db: Session = Depends(get_d
 # и без отдельной настройки адреса API. Папка frontend лежит рядом с backend.
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 
+# Статика (css/js/svg/шрифты) кешируется браузером — повторные заходы грузятся
+# мгновенно. HTML не кешируем, чтобы изменения сайта были видны сразу.
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if path.endswith((".css", ".js", ".svg", ".png", ".jpg", ".jpeg",
+                          ".webp", ".woff", ".woff2", ".ico")):
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+        elif path.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
 if os.path.isdir(FRONTEND_DIR):
     @app.get("/")
     def serve_index():
-        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+        return FileResponse(
+            os.path.join(FRONTEND_DIR, "index.html"),
+            headers={"Cache-Control": "no-cache"},
+        )
 
     # Все остальные файлы (css, js, favicon и т.д.) монтируются на /.
     # Монтирование идёт ПОСЛЕ объявления всех /api-роутов, поэтому API не перекрывается.
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
+    app.mount("/", CachedStaticFiles(directory=FRONTEND_DIR, html=True), name="static")
 
