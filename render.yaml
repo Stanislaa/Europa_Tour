@@ -7,6 +7,7 @@
 databases:
   - name: europa-tour-db
     plan: free
+    region: frankfurt          # та же зона, что и веб-сервис, иначе внутренний хост dpg-…-a не резолвится
     databaseName: europa_tour
     user: europa_tour
 
