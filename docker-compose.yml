@@ -1,51 +1,9 @@
-version: "3.9"
-
-services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: europa_tour
-      MYSQL_USER: euro
-      MYSQL_PASSWORD: europass
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: mysql+pymysql://euro:europass@mysql:3306/europa_tour
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: change-me-in-production
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    ports:
-      - "8000:8000"
-    command: >
-      sh -c "sleep 5 && python seed.py || true && uvicorn main:app --host 0.0.0.0 --port 8000"
-
-  frontend:
-    image: nginx:alpine
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-    ports:
-      - "8080:80"
-    depends_on:
-      - backend
-
-volumes:
-  mysql_data:
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#1c1a18"/>
+  <g transform="translate(32 32) scale(1.55)">
+    <path d="M0-13c4 5 4 9 0 13-4-4-4-8 0-13z" fill="#d97834"/>
+    <path d="M0-2c5-2 9-1 12 3-5 3-9 2-12-3z" fill="#d97834" opacity="0.78"/>
+    <path d="M0-2c-5-2-9-1-12 3 5 3 9 2 12-3z" fill="#d97834" opacity="0.78"/>
+    <path d="M0 0c2 4 2 8 0 12-2-4-2-8 0-12z" fill="#d97834" opacity="0.58"/>
+  </g>
+</svg>
