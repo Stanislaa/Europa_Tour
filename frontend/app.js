@@ -68,7 +68,11 @@ async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token()) headers.Authorization = `Bearer ${token()}`;
   const resp = await fetch(API + path, { ...opts, headers });
-  if (resp.status === 401) {
+  // Истёкшая сессия: разлогиниваем и уводим на вход только для запросов
+  // с токеном. На странице входа токена нет, поэтому ответ 401 от
+  // /api/auth/login пройдёт дальше и покажет реальную причину
+  // («Неверный email или пароль»), а не общее «Требуется авторизация».
+  if (resp.status === 401 && token()) {
     setAuth(null, null);
     location.hash = '#/login';
     throw new Error('Требуется авторизация');
@@ -667,8 +671,10 @@ async function renderPayment(app, bookingId) {
 // ---------------- Вход ----------------
 function renderLogin(app) {
   app.appendChild($('#tpl-login').content.cloneNode(true));
+  const errBox = $('#login-error');
   $('#login-form').onsubmit = async (e) => {
     e.preventDefault();
+    errBox.hidden = true;
     const fd = new FormData(e.target);
     try {
       const r = await api('/api/auth/login', {
@@ -679,7 +685,12 @@ function renderLogin(app) {
       favIds = null;
       toast('Вы успешно вошли', 'success');
       navigate('#/');
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      const msg = e.message || 'Неверный email или пароль';
+      errBox.textContent = msg;
+      errBox.hidden = false;
+      toast(msg, 'error');
+    }
   };
 }
 

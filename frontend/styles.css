@@ -772,6 +772,17 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 .auth-form input:disabled { opacity: .55; cursor: not-allowed; }
 .field-hint { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 .field-readonly { opacity: .85; }
+/* Сообщение об ошибке под полями формы (например, неверный логин). */
+.form-error {
+  margin: 2px 0 0;
+  padding: 10px 14px;
+  background: var(--err-bg);
+  color: var(--err-fg);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+.form-error[hidden] { display: none; }
 
 /* поле пароля с кнопкой «показать» */
 .pwd-field { position: relative; }
@@ -1096,9 +1107,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   /* Отступы по бокам + учёт «чёлки»/скруглений экрана, чтобы контент
      не прилипал к рамкам смартфона. */
   .container {
-    padding-left: max(18px, env(safe-area-inset-left));
-    padding-right: max(18px, env(safe-area-inset-right));
+    padding-left: max(22px, env(safe-area-inset-left));
+    padding-right: max(22px, env(safe-area-inset-right));
   }
+  /* У героя на мобилке свои внутренние отступы — синхронизируем с краями. */
+  .hero-inner { padding-left: 22px; padding-right: 22px; }
   .filters { grid-template-columns: 1fr; }
   .field-search, .field-actions { grid-column: span 1; }
   .field-actions { flex-direction: column; }
